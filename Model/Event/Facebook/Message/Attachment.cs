@@ -4,9 +4,5 @@
     {
         public string? type { get; set; }
         public Payload? payload { get; set; }
-        public Attachment()
-        {
-
-        }
     }
 }

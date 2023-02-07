@@ -1,4 +1,4 @@
-﻿namespace Webhook.Model.Event.Facebook.Facebook.Comment
+﻿namespace Webhook.Model.Event.Facebook.Comment
 {
     public class Post
     {

@@ -85,20 +85,63 @@ namespace Webhook.Controllers
                                     sender = JsonConvert.DeserializeObject<SocialUserInformation>(model);
                                 }
                             }
-                            //sender = gson.fromJson(output, SocialUserInformation.class);
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError("get user info fail");
+                        return Ok();
+                    }
 
-                        Reaction? reaction = messaging.reaction;
-                        if (reaction == null)
+                    Reaction? reaction = messaging.reaction;
+                    if (reaction == null)
+                    {
+                        string text = messaging.message.text;
+                        //message with text only
+                        if (text != null)
                         {
-                            string text = messaging.message.text;
-                            //message with text only
-                            if (text != null)
+                            MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
+                                senderId, sender.name, sender.profile_pic,
+                                "null", recipientId, messaging.message.mid,
+                                text, null, recipientId);
+
+                            //Send to kafka server
+                            await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                                new MessageToKafka
+                                {
+                                    code = 200,
+                                    message = "successfully",
+                                    data = mes
+                                }));
+                        }
+                        //message with attachment only
+                        else
+                        {
+                            int i = 0;
+                            foreach (Attachment attachment in messaging.message.attachments)
                             {
+                                Attachment attr = attachment;
+                                Payload payload = attachment.payload;
+
+                                // Tạo đường dẫn trong ổ
+                                if (attachment.type.Equals("file") || attachment.type.Equals("image") || attachment.type.Equals("video"))
+                                {
+                                    attachment.payload.name = payload.url.Split("/")[payload.url.Split("/").Length - 1].Split("?")[0];
+                                }
+
+                                if (payload.sticker_id != null)
+                                {
+                                    attachment.type = "sticker";
+                                }
+
+                                //convert to base64
+                                string encodeStr = (new WebClient()).DownloadString(payload.url);
+                                attachment.payload.fileBase64 = encodeStr;
+                                attachment.payload.type = attachment.payload.name.Split(".")[1];
+
                                 MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
-                                    senderId, sender.name, sender.profile_pic,
-                                    "null", recipientId, messaging.message.mid,
-                                    text, null, recipientId);
+                                       sender.id, sender.name, sender.profile_pic, "null", recipientId, messaging.message.mid + "_" + i,
+                                       "", attachment, recipientId);
 
                                 //Send to kafka server
                                 await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
@@ -108,120 +151,122 @@ namespace Webhook.Controllers
                                         message = "successfully",
                                         data = mes
                                     }));
-                            }
-                            //message with attachment only
-                            else
-                            {
 
+                                i++;
                             }
-                        }
-                        //message with reaction
-                        else
-                        {
-                            MessageReaction mes = new MessageReaction(channel, messaging.timestamp,
-                               senderId, sender.name, sender.profile_pic,
-                               "null", recipientId, reaction.mid,
-                               reaction.action, reaction.emoji, reaction.reaction, recipientId);
-
-                            await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                                new MessageToKafka
-                                {
-                                    code = 200,
-                                    message = "successfully",
-                                    data = mes
-                                }));
                         }
                     }
-                    catch (Exception ex)
+                    //message with reaction
+                    else
                     {
-                        throw new Exception(ex.Message);
+                        MessageReaction mes = new MessageReaction(channel, messaging.timestamp,
+                           senderId, sender.name, sender.profile_pic,
+                           "null", recipientId, reaction.mid,
+                           reaction.action, reaction.emoji, reaction.reaction, recipientId);
+
+                        await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                            new MessageToKafka
+                            {
+                                code = 200,
+                                message = "successfully",
+                                data = mes
+                            }));
                     }
                 }
             }
             else
             {
                 Value value = input.entry[0].changes[0].value;
-                if (!value.verb.Equals("edited"))
+                if (value.verb.Equals("remove"))
                 {
-                    string senderId = value.from.id;
-                    string pageId = input.entry[0].id;
-
-                    if (value.item.Equals("comment"))
+                    return Ok();
+                }
+                else
+                {
+                    if (!value.verb.Equals("edited"))
                     {
-                        string accessToken = facebookPages["" + pageId];
+                        string senderId = value.from.id;
+                        string pageId = input.entry[0].id;
 
-                        SocialUserInformation sender = null;
-
-                        try
+                        if (value.item.Equals("comment"))
                         {
-                            if (sender == null && accessToken != null)
+                            string accessToken = facebookPages["" + pageId];
+
+                            SocialUserInformation sender = null;
+
+                            try
                             {
-                                string fields = "id,name,profile_pic";
-                                string url = string.Format("https://graph.facebook.com/v13.0/{0}?fields={1}&access_token={2}", senderId, fields, accessToken);
-                                using (var client = new HttpClient())
+                                if (sender == null && accessToken != null)
                                 {
-                                    var result = client.GetAsync(url).Result;
-                                    if (result.IsSuccessStatusCode)
+                                    string fields = "id,name,profile_pic";
+                                    string url = string.Format("https://graph.facebook.com/v13.0/{0}?fields={1}&access_token={2}", senderId, fields, accessToken);
+                                    using (var client = new HttpClient())
                                     {
-                                        var model = result.Content.ReadAsStringAsync().Result;
-                                        sender = JsonConvert.DeserializeObject<SocialUserInformation>(model);
+                                        var result = client.GetAsync(url).Result;
+                                        if (result.IsSuccessStatusCode)
+                                        {
+                                            var model = result.Content.ReadAsStringAsync().Result;
+                                            sender = JsonConvert.DeserializeObject<SocialUserInformation>(model);
+                                        }
                                     }
                                 }
                             }
-                        }
-                        catch (IOException e)
-                        {
-                            throw new Exception(e.Message);
-                        }
-
-                        if (sender != null)
-                        {
-                            Comment comment;
-                            Attachment attachment = new Attachment();
-                            attachment.payload = new Payload();
-                            if (value.photo != null && value.video != null)
+                            catch (IOException e)
                             {
-                                comment = new Comment(value.comment_id, value.from.id
-                                   , value.from.name, value.post_id, value.message
-                                   , value.created_time, value.parent_id
-                                   , value.item, sender.profile_pic, null);
-
-                                await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
-                               new MessageToKafka
-                               {
-                                   code = 200,
-                                   message = "successfully",
-                                   data = comment
-                               }));
+                                _logger.LogError("get user info fail");
+                                return Ok();
                             }
-                            else
+
+                            if (sender != null)
                             {
-                                if (value.photo != null)
+                                Comment comment;
+                                Attachment attachment = new Attachment();
+                                attachment.payload = new Payload();
+                                if (value.photo == null && value.video == null)
                                 {
-                                    attachment.type = "image";
-                                    attachment.payload.url = value.photo;
+                                    comment = new Comment(value.comment_id, value.from.id
+                                       , value.from.name, value.post_id, value.message
+                                       , value.created_time, value.parent_id
+                                       , value.item, sender.profile_pic, null);
+
+                                    await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
+                                   new MessageToKafka
+                                   {
+                                       code = 200,
+                                       message = "successfully",
+                                       data = comment
+                                   }));
                                 }
                                 else
                                 {
-                                    attachment.type = "video";
-                                    attachment.payload.url = value.video;
-                                }
+                                    if (value.photo != null)
+                                    {
+                                        attachment.type = "image";
+                                        attachment.payload.url = value.photo;
+                                    }
+                                    else
+                                    {
+                                        attachment.type = "video";
+                                        attachment.payload.url = value.video;
+                                    }
 
-                                // Tạo đường dẫn trong ổ
-                                // Sticker
-                                if (attachment.type.Equals("file") || attachment.type.Equals("image") || attachment.type.Equals("video"))
-                                {
-                                    attachment.payload.name = attachment.payload.url.Split("/")[attachment.payload.url.Split("/").Length - 1].Split("\\?")[0];
-                                }
-                                string encodeStr;
+                                    // Sticker
+                                    if (attachment.type.Equals("file") || attachment.type.Equals("image") || attachment.type.Equals("video"))
+                                    {
+                                        attachment.payload.name = attachment.payload.url.Split("/")[attachment.payload.url.Split("/").Length - 1].Split("?")[0];
+                                    }
 
-                                var webRequest = WebRequest.Create(attachment.payload.url);
-                                using (var response = webRequest.GetResponse())
-                                using (var content = response.GetResponseStream())
-                                using (var reader = new StreamReader(content))
-                                {
-                                    var strContent = reader.ReadToEnd();
-                                    encodeStr = Convert.ToBase64String(Encoding.UTF8.GetBytes(strContent));
+                                    var url = attachment.payload.url;
+
+                                    //đọc content file
+                                    string encodeStr = (new WebClient()).DownloadString(url);
+                                    attachment.payload.fileBase64 = encodeStr;
+                                    attachment.payload.type = attachment.payload.name.Split(".")[1];
+
+                                    comment = new Comment(value.comment_id, value.from.id
+                                    , value.from.name, value.post.id, value.message
+                                    , value.created_time, value.parent_id
+                                    , value.item, sender.profile_pic, attachment);
                                 }
                             }
                         }
