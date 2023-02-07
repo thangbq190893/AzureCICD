@@ -20,15 +20,20 @@ namespace Webhook.Controllers
         private readonly IKafkaService _kafkaService;
         private readonly ICacheService _cacheService;
         private readonly ISocialManagementRepository _socialManagementRepository;
+        private string facebookApi;
+        private string facebookVersion;
         public MessengerWebhook(ICacheService cacheService
             , ILogger<MessengerWebhook> logger
             , IKafkaService kafkaService
-            , ISocialManagementRepository socialManagementRepository)
+            , ISocialManagementRepository socialManagementRepository
+            , IConfiguration configuration)
         {
             _logger = logger;
             _kafkaService = kafkaService;
             _cacheService = cacheService;
             _socialManagementRepository = socialManagementRepository;
+            facebookApi = configuration.GetSection("social:domain-api:facebook").Value;
+            facebookVersion = configuration.GetSection("social:version:facebook").Value;
         }
 
         [HttpGet]
@@ -75,7 +80,7 @@ namespace Webhook.Controllers
                         if (sender == null)
                         {
                             string fields = "id,name,profile_pic";
-                            string url = string.Format("https://graph.facebook.com/v13.0/{0}?fields={1}&access_token={2}", senderId, fields, accessToken);
+                            string url = string.Format(facebookApi + "/" + facebookVersion + senderId + "?fields=" + fields + "&access_token=" + accessToken);
                             using (var client = new HttpClient())
                             {
                                 var result = client.GetAsync(url).Result;
@@ -90,7 +95,6 @@ namespace Webhook.Controllers
                     catch (Exception ex)
                     {
                         _logger.LogError("get user info fail");
-                        return Ok();
                     }
 
                     Reaction? reaction = messaging.reaction;
