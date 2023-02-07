@@ -2,7 +2,7 @@
 {
     public class MessageData
     {
-        public string channel { get; set; }
+        public int channel { get; set; }
 
         public string receiveId { get; set; }
 

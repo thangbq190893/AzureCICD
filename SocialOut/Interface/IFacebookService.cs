@@ -7,7 +7,7 @@ namespace SocialOut.Interface
 {
     public interface IFacebookService
     {
-        Task SendText(MessageData mes);
+        Task<SendMessageResponseData> SendText(MessageData mes);
         Task ReplyComment(ReplyComment input);
         Task<List<SocialInformation>> GetPageInfo(PageInfo input);
         Task SendAttachment(MultipartFileData file, string senderId, string recipient, string message, string type);

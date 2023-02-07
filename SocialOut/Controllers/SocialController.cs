@@ -30,7 +30,7 @@ namespace SocialOut.Controllers
                 return Ok(new PageInfoResponse
                 {
                     code = 200,
-                    message = "successful",
+                    message = "successfully",
                     data = res
                 });
             }
@@ -40,34 +40,75 @@ namespace SocialOut.Controllers
             }
         }
 
-        //[HttpPost]
-        //[Route("/sendMessage/facebook/text")]
-        //public async Task<IActionResult> SendMessageToFacebook(MessageData mes)
-        //{
-        //    try
-        //    {
-        //        await _facebookService.SendText(mes);
-        //        return StatusCode(200);
-        //    }
-        //    catch(Exception ex)
-        //    {
-        //        return StatusCode(500);
-        //    }
-        //}
+        [HttpPost]
+        [Route("/sendMessage/facebook/text")]
+        public async Task<IActionResult> SendMessageToFacebook(MessageData mes)
+        {
+            try
+            {
+                SendMessageResponseData res = await _facebookService.SendText(mes);
+                if (res != null)
+                {
+                    return Ok(new SendMessage
+                    {
+                        code = 200,
+                        message = "successfully",
+                        data = res
+                    });
+                }
+                else
+                {
+                    return StatusCode(500);
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500);
+            }
+        }
 
-        //[HttpPost]
-        //[Route("/refreshToken/zaloOa")]
-        //public async Task<IActionResult> RefreshToken(GetZaloToken input)
-        //{
-        //    try
-        //    {
-        //        await _zaloService.RefreshTokenZaloOa(input);
-        //        return Ok();
-        //    }
-        //    catch(Exception ex)
-        //    {
-        //        return StatusCode(500);
-        //    }
-        //}
+        [HttpPost]
+        [Route("/sendMessage/facebook/attachment")]
+        public async Task<IActionResult> SendMessageAttachmentToFacebook()
+        {
+            string content = await new StreamReader(Request.Body).ReadToEndAsync();
+            //try
+            //{
+            //    SendMessageResponseData res = await _facebookService.SendText(mes);
+            //    if (res != null)
+            //    {
+            //        return Ok(new SendMessage
+            //        {
+            //            code = 200,
+            //            message = "successfully",
+            //            data = res
+            //        });
+            //    }
+            //    else
+            //    {
+            //        return StatusCode(500);
+            //    }
+            //}
+            //catch (Exception ex)
+            //{
+            //    return StatusCode(500);
+            //}
+            return Ok();
+        }
+
+        [HttpPost]
+        [Route("/refreshToken/zaloOa")]
+        public async Task<IActionResult> RefreshToken(GetZaloToken input)
+        {
+            try
+            {
+                await _zaloService.RefreshTokenZaloOa(input);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500);
+            }
+        }
     }
 }
