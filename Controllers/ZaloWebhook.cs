@@ -1,12 +1,12 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
+using System.Net;
 using Webhook.Interface;
 using Webhook.Model;
 using Webhook.Model.Event.Zalo;
 
 namespace Webhook.Controllers
 {
-    [Route("api/zalo-webhook")]
     [ApiController]
     public class ZaloWebhook : ControllerBase
     {
@@ -23,6 +23,7 @@ namespace Webhook.Controllers
         }
 
         [HttpPost]
+        [Route("/api/zalo-webhook")]
         public async Task<IActionResult> WebhookAsync(Data input)
         {
             if(input.message.msg_id.Equals("This is message id") && input.message.text.Equals("This is testing message"))
@@ -63,9 +64,7 @@ namespace Webhook.Controllers
                     }
 
                     //Gửi text hoặc attachment
-                    MessageAttachment mes;
-                    Attachment attachment = new Attachment();
-                    attachment.payload = new Payload();
+                    MessageAttachment mes = null;
                     if (input.message.attachments == null)
                     {
                         mes = new MessageAttachment("Zalo"
@@ -75,46 +74,65 @@ namespace Webhook.Controllers
                     }
                     else
                     {
+                        Webhook.Model.Event.Attachment attr = input.message.attachments[0];
                         string fileName;
-                        Attachment attr = input.message.attachments[0];
-                        Payload payload = new Payload();
                         if (attr.type.Equals("sticker"))
                         {
-                            string stickerId = attr.payload.url.Split("?")[1]
+                            string stickerId = input.message.attachments[0].payload.url.Split("?")[1]
                                     .Split("&")[0].Split("=")[1];
 
                             fileName = stickerId + ".png";
 
-                            payload.(stickerId);
+                            attr.payload.sticker_id = stickerId;
                         }
                         else
                         {
                             // file
-                            if (payload.getName() != null)
+                            if (attr.payload.name != null)
                             {
-                                fileName = payload.getName();
+                                fileName = input.message.attachments[0].payload.name;
                             }
                             // Ảnh
                             else
                             {
-                                fileName = payload.getUrl().split("/")[payload.getUrl().split("/").length - 1];
+                                fileName = input.message.attachments[0].payload.url.Split("/")[input.message.attachments[0].payload.url.Split("/").Length - 1];
+                            }
+
+                            string encodeStr = (new WebClient()).DownloadString(input.message.attachments[0].payload.url);
+                            attr.payload.fileBase64 = encodeStr;
+
+                            if (attr.payload.name == null)
+                            {
+                                attr.payload.name = fileName;
+                            }
+
+                            if (attr.payload.type == null)
+                            {
+                                attr.payload.type = fileName.Split(".")[1];
+                            }
+
+                            if (input.message.text == null)
+                            { // message with attachment only
+                                mes = new MessageAttachment("Zalo", long.Parse(input.timestamp), senderId
+                                    , sender.name, sender.profile_pic, "", input.recipient.id,
+                                        input.message.msg_id, "", attr, appId);
+                            }
+                            else
+                            { //message with text + attachment
+                                mes = new MessageAttachment("Zalo", long.Parse(input.timestamp), senderId
+                                    , sender.name, sender.profile_pic, "", input.recipient.id,
+                                        input.message.msg_id, input.message.text, attr, appId);
                             }
                         }
-
-
-                        mes = new MessageAttachment("Zalo"
-                             , long.Parse(input.timestamp), input.sender.id, sender.name
-                             , sender.profile_pic, "", input.recipient.id, input.message.msg_id
-                             , input.message.text, null, input.app_id);
                     }
 
                     await _kafkaService.SendZaloMessage(System.Text.Json.JsonSerializer.Serialize(
-                            new MessageToKafka
-                            {
-                                code = 200,
-                                message = "successfully",
-                                data = mes
-                            }));
+                           new MessageToKafka
+                           {
+                               code = 200,
+                               message = "successfully",
+                               data = mes
+                           }));
 
                     return Ok();
                 }

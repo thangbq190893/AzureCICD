@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Webhook.Interface;
 using Webhook.Model;
+using Webhook.Model.Event;
 using Webhook.Model.Event.Facebook.Comment;
 using Webhook.Model.Event.Facebook.Message;
 using Webhook.Service;
@@ -119,7 +120,13 @@ namespace Webhook.Controllers
                                 "null", recipientId, messaging.message.mid,
                                 text, null, recipientId);
 
+                            // MessageAttachment mes = new MessageAttachment("Facebook", 1676004162117,
+                            //"6097077896993079", "Ngọc Nam", "https://platform-lookaside.fbsbx.com/platform/profilepic/?psid=6097077896993079&width=1024&ext=1678596168&hash=AeTPhjUsPs6INLs0c1w",
+                            //    "null", "107188248928072", "m_01O9NxSp9fYET4AJJ6CuLRGsHw5pNkMuziMKQ0_lammgzNp5ZTsz3oaHABV0q1TtO8UxoGLHVKjhe_JihSrg1Q",
+                            //    "1234", null, "107188248928072");
+
                             //Send to kafka server
+                            var a = System.Text.Json.JsonSerializer.Serialize(mes);
                             await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
                                 new MessageToKafka
                                 {
@@ -135,27 +142,27 @@ namespace Webhook.Controllers
                             foreach (Attachment attachment in messaging.message.attachments)
                             {
                                 Attachment attr = attachment;
-                                Payload payload = attachment.payload;
+                                Payload payload = attr.payload;
 
                                 // Tạo đường dẫn trong ổ
-                                if (attachment.type.Equals("file") || attachment.type.Equals("image") || attachment.type.Equals("video"))
+                                if (attr.type.Equals("file") || attr.type.Equals("image") || attr.type.Equals("video"))
                                 {
-                                    attachment.payload.name = payload.url.Split("/")[payload.url.Split("/").Length - 1].Split("?")[0];
+                                    attr.payload.name = payload.url.Split("/")[payload.url.Split("/").Length - 1].Split("?")[0];
                                 }
 
                                 if (payload.sticker_id != null)
                                 {
-                                    attachment.type = "sticker";
+                                    attr.type = "sticker";
                                 }
 
                                 //convert to base64
                                 string encodeStr = (new WebClient()).DownloadString(payload.url);
-                                attachment.payload.fileBase64 = encodeStr;
-                                attachment.payload.type = attachment.payload.name.Split(".")[1];
+                                attr.payload.fileBase64 = encodeStr;
+                                attr.payload.type = attr.payload.name.Split(".")[1];
 
                                 MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
                                        sender.id, sender.name, sender.profile_pic, "null", recipientId, messaging.message.mid + "_" + i,
-                                       "", attachment, recipientId);
+                                       "", attr, recipientId);
 
                                 //Send to kafka server
                                 await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(

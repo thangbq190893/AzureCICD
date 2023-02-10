@@ -1,4 +1,4 @@
-﻿namespace Webhook.Model.Event.Facebook.Message
+﻿namespace Webhook.Model.Event
 {
     public class Payload
     {

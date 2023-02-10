@@ -1,4 +1,5 @@
-﻿using Webhook.Model.Event.Facebook.Message;
+﻿using Webhook.Model.Event;
+using Webhook.Model.Event.Facebook.Message;
 
 namespace Webhook.Model
 {
