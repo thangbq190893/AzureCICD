@@ -1,10 +1,13 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SocialOut.Interface;
 using SocialOut.Model.Input;
 using SocialOut.Model.Input.Facebook;
 using SocialOut.Model.Input.Zalo;
 using SocialOut.Model.Response;
+using System.Text;
 
 namespace SocialOut.Controllers
 {
@@ -69,31 +72,17 @@ namespace SocialOut.Controllers
 
         [HttpPost]
         [Route("/sendMessage/facebook/attachment")]
-        public async Task<IActionResult> SendMessageAttachmentToFacebook()
+        public async Task<IActionResult> SendMessageAttachmentToFacebook([FromForm] FileData input)
         {
-            string content = await new StreamReader(Request.Body).ReadToEndAsync();
-            //try
-            //{
-            //    SendMessageResponseData res = await _facebookService.SendText(mes);
-            //    if (res != null)
-            //    {
-            //        return Ok(new SendMessage
-            //        {
-            //            code = 200,
-            //            message = "successfully",
-            //            data = res
-            //        });
-            //    }
-            //    else
-            //    {
-            //        return StatusCode(500);
-            //    }
-            //}
-            //catch (Exception ex)
-            //{
-            //    return StatusCode(500);
-            //}
-            return Ok();
+            try
+            {
+                await _facebookService.SendAttachment(input.filedata, input.data.senderId, input.data.recipient, input.data.message, input.data.type);
+                return Ok();
+            }
+            catch (Exception e)
+            {
+                return StatusCode(500);
+            }
         }
 
         [HttpPost]
