@@ -80,7 +80,7 @@ namespace Webhook.Controllers
                         if (sender == null)
                         {
                             string fields = "id,name,profile_pic";
-                            string url = string.Format(facebookApi + "/" + facebookVersion + senderId + "?fields=" + fields + "&access_token=" + accessToken);
+                            string url = string.Format(facebookApi + "/" + facebookVersion + "/" + senderId + "?fields=" + fields + "&access_token=" + accessToken);
                             using (var client = new HttpClient())
                             {
                                 var result = client.GetAsync(url).Result;
@@ -90,6 +90,16 @@ namespace Webhook.Controllers
                                     sender = JsonConvert.DeserializeObject<SocialUserInformation>(model);
                                 }
                             }
+                        }
+
+                        if(sender.name == null)
+                        {
+                            return Ok(new MessageToKafka
+                            {
+                                code = 500,
+                                message = "get user info fail",
+                                data = null
+                            });
                         }
                     }
                     catch (Exception ex)

@@ -10,8 +10,8 @@ namespace Webhook.Engine
         private readonly ProducerConfig config;
         public ZaloProducer(IConfiguration configuration)
         {
-            topicName = configuration.GetConnectionString("kafka-topic:zalo-message");
-            kafkaServer = configuration.GetConnectionString("kafka:bootstrap-servers");
+            topicName = configuration.GetSection("kafka-topic:zalo-message").Value;
+            kafkaServer = configuration.GetSection("kafka:bootstrap-servers").Value;
             config = new ProducerConfig
             {
                 BootstrapServers = kafkaServer
