@@ -1,4 +1,6 @@
 ﻿using Confluent.Kafka;
+using Newtonsoft.Json;
+using Serilog;
 
 namespace Webhook.Engine
 {
@@ -29,7 +31,7 @@ namespace Webhook.Engine
             }
             catch (Exception e)
             {
-                throw new Exception(e.Message);
+                Log.Error("Zalo Feed send to kafka server fail : " + JsonConvert.SerializeObject(e));
             }
         }
     }

@@ -1,6 +1,8 @@
 ﻿using FakeItEasy;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
+using Serilog;
+using System.Dynamic;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -17,19 +19,16 @@ namespace Webhook.Controllers
     [ApiController]
     public class MessengerWebhook : ControllerBase
     {
-        private readonly ILogger<MessengerWebhook> _logger;
         private readonly IKafkaService _kafkaService;
         private readonly ICacheService _cacheService;
         private readonly ISocialManagementRepository _socialManagementRepository;
         private string facebookApi;
         private string facebookVersion;
         public MessengerWebhook(ICacheService cacheService
-            , ILogger<MessengerWebhook> logger
             , IKafkaService kafkaService
             , ISocialManagementRepository socialManagementRepository
             , IConfiguration configuration)
         {
-            _logger = logger;
             _kafkaService = kafkaService;
             _cacheService = cacheService;
             _socialManagementRepository = socialManagementRepository;
@@ -44,6 +43,7 @@ namespace Webhook.Controllers
             {
                 if (!verify_token.Equals("11111"))
                 {
+                    Log.Warning("Wrong verify_token : " + verify_token);
                     return StatusCode(422);
                 }
 
@@ -51,6 +51,7 @@ namespace Webhook.Controllers
             }
             catch (Exception e)
             {
+                Log.Error("VerifyWebhook Error: " + JsonConvert.SerializeObject(e));
                 return StatusCode(500);
             }
         }
@@ -76,8 +77,6 @@ namespace Webhook.Controllers
                     SocialUserInformation sender = null;
                     try
                     {
-                        //Lấy thông tin người gửi
-                        //sender = SocialUtils.checkUserInfoInList(senderId, usersInformation);
                         if (sender == null)
                         {
                             string fields = "id,name,profile_pic";
@@ -98,14 +97,14 @@ namespace Webhook.Controllers
                             return Ok(new MessageToKafka
                             {
                                 code = 500,
-                                message = "get user info fail",
+                                message = "Fb get user info fail",
                                 data = null
                             });
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError("get user info fail");
+                        Log.Information("Fb get user info fail : " + JsonConvert.SerializeObject(ex));
                     }
 
                     Reaction? reaction = messaging.reaction;
@@ -116,17 +115,11 @@ namespace Webhook.Controllers
                         if (text != null)
                         {
                             MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
-                                senderId, sender.name, sender.profile_pic,
+                                senderId, sender.name != null ? sender.name : "", sender.profile_pic != null ? sender.profile_pic : "",
                                 "null", recipientId, messaging.message.mid,
                                 text, null, recipientId);
 
-                            // MessageAttachment mes = new MessageAttachment("Facebook", 1676004162117,
-                            //"6097077896993079", "Ngọc Nam", "https://platform-lookaside.fbsbx.com/platform/profilepic/?psid=6097077896993079&width=1024&ext=1678596168&hash=AeTPhjUsPs6INLs0c1w",
-                            //    "null", "107188248928072", "m_01O9NxSp9fYET4AJJ6CuLRGsHw5pNkMuziMKQ0_lammgzNp5ZTsz3oaHABV0q1TtO8UxoGLHVKjhe_JihSrg1Q",
-                            //    "1234", null, "107188248928072");
-
                             //Send to kafka server
-                            var a = System.Text.Json.JsonSerializer.Serialize(mes);
                             await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
                                 new MessageToKafka
                                 {
@@ -161,7 +154,7 @@ namespace Webhook.Controllers
                                 attr.payload.type = attr.payload.name.Split(".")[1];
 
                                 MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
-                                       sender.id, sender.name, sender.profile_pic, "null", recipientId, messaging.message.mid + "_" + i,
+                                       sender.id, sender.name != null ? sender.name : "", sender.profile_pic != null ? sender.profile_pic : "", "null", recipientId, messaging.message.mid + "_" + i,
                                        "", attr, recipientId);
 
                                 //Send to kafka server
@@ -220,7 +213,7 @@ namespace Webhook.Controllers
                                 if (sender == null && accessToken != null)
                                 {
                                     string fields = "id,name,profile_pic";
-                                    string url = string.Format("https://graph.facebook.com/v13.0/{0}?fields={1}&access_token={2}", senderId, fields, accessToken);
+                                    string url = string.Format(facebookApi + "/" + facebookVersion + "/" + senderId + "?fields=" + fields + "&access_token=" + accessToken);
                                     using (var client = new HttpClient())
                                     {
                                         var result = client.GetAsync(url).Result;
@@ -234,8 +227,7 @@ namespace Webhook.Controllers
                             }
                             catch (IOException e)
                             {
-                                _logger.LogError("get user info fail");
-                                return Ok();
+                                Log.Information("Fb get user info fail : " + JsonConvert.SerializeObject(e));
                             }
 
                             if (sender != null)
@@ -248,7 +240,7 @@ namespace Webhook.Controllers
                                     comment = new Comment(value.comment_id, value.from.id
                                        , value.from.name, value.post_id, value.message
                                        , value.created_time, value.parent_id
-                                       , value.item, sender.profile_pic, null);
+                                       , value.item, sender.profile_pic != null ? sender.profile_pic : "", null);
 
                                     await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
                                    new MessageToKafka
@@ -287,7 +279,7 @@ namespace Webhook.Controllers
                                     comment = new Comment(value.comment_id, value.from.id
                                     , value.from.name, value.post.id, value.message
                                     , value.created_time, value.parent_id
-                                    , value.item, sender.profile_pic, attachment);
+                                    , value.item, sender.profile_pic != null ? sender.profile_pic : "", attachment) ;
                                 }
                             }
                         }
@@ -295,6 +287,40 @@ namespace Webhook.Controllers
                 }
             }
 
+            return Ok();
+        }
+
+        [HttpPost]
+        [Route("/test-kafka")]
+        public async Task<IActionResult> TestKafkaAsync()
+        {
+            dynamic mes = new ExpandoObject();
+            mes.messageId = "m_s95_ZROpqPLBx-OpjD7qdRGsHw5pNkMuziMKQ0_lamn7wpNPJPpfS-GneGmK_aRXOUUTrIqWmDtRWhSQxjeFVg";
+            mes.text = "Hello";
+            mes.attachment = null;
+            mes.channel = "Facebook";
+            mes.time = 1676011955233;
+            mes.senderId = "6097077896993079";
+            mes.senderName = "Ng\u1ECDc Nam";
+            mes.senderProfilePictur = "https://platform-lookaside.fbsbx.com/platform/profilepic/?psid=6097077896993079\u0026width=1024\u0026ext=1678603963\u0026hash=AeSHdbX41LVWCcJ_m68";
+            mes.senderGender = "null";
+            mes.recipientId = "107188248928072";
+            mes.appId = "10718824.8928072";
+            try
+            {
+                await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                new MessageToKafka
+                {
+                    code = 200,
+                    message = "successfully",
+                    data = mes
+                }));
+                Log.Information("TestKafkaAsync OKE! ");
+            }
+            catch (Exception ex)
+            {
+                Log.Error("TestKafkaAsync Error: " + JsonConvert.SerializeObject(ex));
+            }
             return Ok();
         }
     }

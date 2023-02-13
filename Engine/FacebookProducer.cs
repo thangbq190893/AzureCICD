@@ -1,4 +1,6 @@
 ﻿using Confluent.Kafka;
+using Newtonsoft.Json;
+using Serilog;
 
 namespace Webhook.Engine
 {
@@ -27,11 +29,12 @@ namespace Webhook.Engine
                 using (var producer = new ProducerBuilder<Null, string>(config).Build())
                 {
                     var result = await producer.ProduceAsync(topicName, new Message<Null, string> { Value = msg });
+                    Log.Information("Fb Message send to kafka server success");
                 }
             }
             catch (Exception e)
             {
-                throw new Exception(e.Message);
+                Log.Error("Fb Message send to kafka server fail : " + JsonConvert.SerializeObject(e));
             }
         }
 
@@ -42,11 +45,12 @@ namespace Webhook.Engine
                 using (var producer = new ProducerBuilder<Null, string>(config).Build())
                 {
                     var result = await producer.ProduceAsync(topicFeed, new Message<Null, string> { Value = feed });
+                    Log.Information("Fb Feed send to kafka server success");
                 }
             }
             catch (Exception e)
             {
-                throw new Exception(e.Message);
+                Log.Error("Fb Feed send to kafka server fail : " + JsonConvert.SerializeObject(e));
             }
         }
     }
