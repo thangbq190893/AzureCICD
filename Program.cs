@@ -2,8 +2,12 @@ using Webhook.Repository;
 using Webhook.Interface;
 using Webhook.Service;
 using Webhook.Engine;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+//builder.Host.UseSerilog((hostingContext, services, loggerConfiguration) => loggerConfiguration
+//                .ReadFrom.Configuration(hostingContext.Configuration)
+//                .Enrich.FromLogContext());
 
 // Add services to the container.
 
