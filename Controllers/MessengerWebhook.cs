@@ -59,6 +59,7 @@ namespace Webhook.Controllers
         [HttpPost]
         public async Task<IActionResult> WebhookAsync(Data input)
         {
+            Log.Information("Event message received");
             string channel = "Facebook";
             // Lấy DS quản lý FB page
             Dictionary<string, string> facebookPages = await _socialManagementRepository.GetFbPages();
@@ -83,7 +84,7 @@ namespace Webhook.Controllers
                             string url = string.Format(facebookApi + "/" + facebookVersion + "/" + senderId + "?fields=" + fields + "&access_token=" + accessToken);
                             using (var client = new HttpClient())
                             {
-                                var result = client.GetAsync(url).Result;
+                                var result = await client.GetAsync(url);
                                 if (result.IsSuccessStatusCode)
                                 {
                                     var model = result.Content.ReadAsStringAsync().Result;
@@ -92,7 +93,7 @@ namespace Webhook.Controllers
                             }
                         }
 
-                        if(sender.name == null)
+                        if (sender == null)
                         {
                             return Ok(new MessageToKafka
                             {
@@ -120,13 +121,22 @@ namespace Webhook.Controllers
                                 text, null, recipientId);
 
                             //Send to kafka server
-                            await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                                new MessageToKafka
-                                {
-                                    code = 200,
-                                    message = "successfully",
-                                    data = mes
-                                }));
+                            try
+                            {
+                                await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                                                                new MessageToKafka
+                                                                {
+                                                                    code = 200,
+                                                                    message = "successfully",
+                                                                    data = mes
+                                                                }));
+
+                                Log.Information("Fb Message send to kafka server success");
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error("Fb Message send to kafka server fail : " + JsonConvert.SerializeObject(e));
+                            }
                         }
                         //message with attachment only
                         else
@@ -158,15 +168,24 @@ namespace Webhook.Controllers
                                        "", attr, recipientId);
 
                                 //Send to kafka server
-                                await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                                    new MessageToKafka
-                                    {
-                                        code = 200,
-                                        message = "successfully",
-                                        data = mes
-                                    }));
+                                try
+                                {
+                                    await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                                   new MessageToKafka
+                                   {
+                                       code = 200,
+                                       message = "successfully",
+                                       data = mes
+                                   }));
 
-                                i++;
+                                    i++;
+
+                                    Log.Information("Fb Attachment send to kafka server success");
+                                }
+                                catch (Exception e)
+                                {
+                                    Log.Error("Fb Attachment send to kafka server fail : " + JsonConvert.SerializeObject(e));
+                                }
                             }
                         }
                     }
@@ -178,13 +197,22 @@ namespace Webhook.Controllers
                            "null", recipientId, reaction.mid,
                            reaction.action, reaction.emoji, reaction.reaction, recipientId);
 
-                        await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                            new MessageToKafka
-                            {
-                                code = 200,
-                                message = "successfully",
-                                data = mes
-                            }));
+                        try
+                        {
+                            await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                                                        new MessageToKafka
+                                                        {
+                                                            code = 200,
+                                                            message = "successfully",
+                                                            data = mes
+                                                        }));
+
+                            Log.Information("Fb Message React send to kafka server success");
+                        }
+                        catch (Exception e)
+                        {
+                            Log.Error("Fb Message React send to kafka server fail : " + JsonConvert.SerializeObject(e));
+                        }
                     }
                 }
             }
@@ -242,13 +270,22 @@ namespace Webhook.Controllers
                                        , value.created_time, value.parent_id
                                        , value.item, sender.profile_pic != null ? sender.profile_pic : "", null);
 
-                                    await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
-                                   new MessageToKafka
-                                   {
-                                       code = 200,
-                                       message = "successfully",
-                                       data = comment
-                                   }));
+                                    try
+                                    {
+                                        await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
+                                          new MessageToKafka
+                                          {
+                                              code = 200,
+                                              message = "successfully",
+                                              data = comment
+                                          }));
+
+                                        Log.Information("Fb Feed send to kafka server success");
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        Log.Error("Fb Feed send to kafka server fail : " + JsonConvert.SerializeObject(e));
+                                    }
                                 }
                                 else
                                 {
@@ -279,7 +316,7 @@ namespace Webhook.Controllers
                                     comment = new Comment(value.comment_id, value.from.id
                                     , value.from.name, value.post.id, value.message
                                     , value.created_time, value.parent_id
-                                    , value.item, sender.profile_pic != null ? sender.profile_pic : "", attachment) ;
+                                    , value.item, sender.profile_pic != null ? sender.profile_pic : "", attachment);
                                 }
                             }
                         }

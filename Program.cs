@@ -5,9 +5,9 @@ using Webhook.Engine;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
-//builder.Host.UseSerilog((hostingContext, services, loggerConfiguration) => loggerConfiguration
-//                .ReadFrom.Configuration(hostingContext.Configuration)
-//                .Enrich.FromLogContext());
+builder.Host.UseSerilog((hostingContext, services, loggerConfiguration) => loggerConfiguration
+                .ReadFrom.Configuration(hostingContext.Configuration)
+                .Enrich.FromLogContext());
 
 // Add services to the container.
 

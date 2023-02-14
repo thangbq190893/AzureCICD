@@ -24,33 +24,17 @@ namespace Webhook.Engine
 
         public async Task SendMessage(string msg)
         {
-            try
+            using (var producer = new ProducerBuilder<Null, string>(config).Build())
             {
-                using (var producer = new ProducerBuilder<Null, string>(config).Build())
-                {
-                    var result = await producer.ProduceAsync(topicName, new Message<Null, string> { Value = msg });
-                    Log.Information("Fb Message send to kafka server success");
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Error("Fb Message send to kafka server fail : " + JsonConvert.SerializeObject(e));
+                var result = await producer.ProduceAsync(topicName, new Message<Null, string> { Value = msg });
             }
         }
 
         public async Task SendFeed(string feed)
         {
-            try
+            using (var producer = new ProducerBuilder<Null, string>(config).Build())
             {
-                using (var producer = new ProducerBuilder<Null, string>(config).Build())
-                {
-                    var result = await producer.ProduceAsync(topicFeed, new Message<Null, string> { Value = feed });
-                    Log.Information("Fb Feed send to kafka server success");
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Error("Fb Feed send to kafka server fail : " + JsonConvert.SerializeObject(e));
+                var result = await producer.ProduceAsync(topicFeed, new Message<Null, string> { Value = feed });
             }
         }
     }
