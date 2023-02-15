@@ -18,7 +18,8 @@ namespace Webhook.Engine
             kafkaServer = configuration.GetSection("kafka:bootstrap-servers").Value;
             config = new ProducerConfig
             {
-                BootstrapServers = kafkaServer
+                BootstrapServers = kafkaServer,
+                MessageMaxBytes = 2 * 1024 * 1024,
             };
         }
 

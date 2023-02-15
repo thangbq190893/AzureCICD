@@ -159,7 +159,8 @@ namespace Webhook.Controllers
                                 }
 
                                 //convert to base64
-                                string encodeStr = (new WebClient()).DownloadString(payload.url);
+                                byte[] contentByte = GetImage(payload.url);
+                                string encodeStr = Convert.ToBase64String(contentByte);
                                 attr.payload.fileBase64 = encodeStr;
                                 attr.payload.type = attr.payload.name.Split(".")[1];
 
@@ -359,6 +360,36 @@ namespace Webhook.Controllers
                 Log.Error("TestKafkaAsync Error: " + JsonConvert.SerializeObject(ex));
             }
             return Ok();
+        }
+
+        byte[] GetImage(string url)
+        {
+            Stream stream = null;
+            byte[] buf;
+
+            try
+            {
+                WebProxy myProxy = new WebProxy();
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(url);
+
+                HttpWebResponse response = (HttpWebResponse)req.GetResponse();
+                stream = response.GetResponseStream();
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    stream.CopyTo(ms);
+                    buf = ms.ToArray();
+                }
+
+                stream.Close();
+                response.Close();
+            }
+            catch (Exception exp)
+            {
+                buf = null;
+            }
+
+            return (buf);
         }
     }
 }
