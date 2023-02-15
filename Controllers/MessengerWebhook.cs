@@ -6,6 +6,7 @@ using System.Dynamic;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Volo.Abp.BlobStoring;
 using Webhook.Interface;
 using Webhook.Model;
 using Webhook.Model.Event;
@@ -19,6 +20,7 @@ namespace Webhook.Controllers
     [ApiController]
     public class MessengerWebhook : ControllerBase
     {
+        private readonly IBlobContainer _blobContainer;
         private readonly IKafkaService _kafkaService;
         private readonly ICacheService _cacheService;
         private readonly ISocialManagementRepository _socialManagementRepository;
@@ -27,13 +29,15 @@ namespace Webhook.Controllers
         public MessengerWebhook(ICacheService cacheService
             , IKafkaService kafkaService
             , ISocialManagementRepository socialManagementRepository
-            , IConfiguration configuration)
+            , IConfiguration configuration
+            , IBlobContainer blobContainer)
         {
             _kafkaService = kafkaService;
             _cacheService = cacheService;
             _socialManagementRepository = socialManagementRepository;
             facebookApi = configuration.GetSection("social:domain-api:facebook").Value;
             facebookVersion = configuration.GetSection("social:version:facebook").Value;
+            _blobContainer = blobContainer;
         }
 
         [HttpGet]
@@ -161,6 +165,11 @@ namespace Webhook.Controllers
                                 //convert to base64
                                 byte[] contentByte = GetImage(payload.url);
                                 string encodeStr = Convert.ToBase64String(contentByte);
+
+                                if(!(await _blobContainer.ExistsAsync(messaging.message.mid)))
+                                {
+                                    await _blobContainer.SaveAsync(messaging.message.mid, contentByte);
+                                }
                                 attr.payload.fileBase64 = encodeStr;
                                 attr.payload.type = attr.payload.name.Split(".")[1];
 

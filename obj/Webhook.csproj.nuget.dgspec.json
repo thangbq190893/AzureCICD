@@ -95,6 +95,10 @@
             "System.Linq": {
               "target": "Package",
               "version": "[4.3.0, )"
+            },
+            "Volo.Abp.BlobStoring": {
+              "target": "Package",
+              "version": "[7.0.1, )"
             }
           },
           "imports": [
