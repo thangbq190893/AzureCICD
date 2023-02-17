@@ -1,14 +1,0 @@
-2023-02-10 10:13:49.224 +07:00 [INF] Context request 
-2023-02-10 10:13:49.436 +07:00 [INF] "/swagger/index.html"
-2023-02-10 10:13:49.505 +07:00 [INF] []
-2023-02-10 10:13:49.996 +07:00 [INF] Context request 
-2023-02-10 10:13:49.997 +07:00 [INF] "/swagger/v1/swagger.json"
-2023-02-10 10:13:49.997 +07:00 [INF] []
-2023-02-10 10:14:19.616 +07:00 [INF] Context request 
-2023-02-10 10:14:19.617 +07:00 [INF] "/api/messenger-webhook"
-2023-02-10 10:14:19.640 +07:00 [INF] [{"Key":"hub.mode","Value":["subscribe"]},{"Key":"hub.challenge","Value":["129720543"]},{"Key":"hub.verify_token","Value":["11111"]}]
-2023-02-10 10:14:19.675 +07:00 [INF] VerifyWebhook success 
-2023-02-10 10:14:30.325 +07:00 [INF] Context request 
-2023-02-10 10:14:30.325 +07:00 [INF] "/api/messenger-webhook"
-2023-02-10 10:14:30.326 +07:00 [INF] []
-2023-02-10 10:14:43.926 +07:00 [INF] WebhookAsync Lấy thông tin người gửi: https://graph.facebook.com/v13.0/6097077896993079?fields=id,name,profile_pic&access_token=EAAJ7DsRmoOYBABDmZBHs8fpKDC5RsDsJ0ZBZBj4ErktEajNaIRJDRPSZCLY9I9g4vt2bTTZAiwH9DkDwHrg2pBx1KHDyRkZBFgjacB1AGZA8zhykIjjrZCZBuVGdPpBY1qdk8ouDJS6hKm3d55wRBXW4G6w87umWhhuPAxBsxfKKkMbG74zCAOhZB3
