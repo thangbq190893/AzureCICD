@@ -20,7 +20,7 @@ namespace Webhook.Controllers
     [ApiController]
     public class MessengerWebhook : ControllerBase
     {
-        private readonly IBlobContainer _blobContainer;
+        //private readonly IBlobContainer _blobContainer;
         private readonly IKafkaService _kafkaService;
         private readonly ICacheService _cacheService;
         private readonly ISocialManagementRepository _socialManagementRepository;
@@ -30,14 +30,14 @@ namespace Webhook.Controllers
             , IKafkaService kafkaService
             , ISocialManagementRepository socialManagementRepository
             , IConfiguration configuration
-            , IBlobContainer blobContainer)
+            /*, IBlobContainer blobContainer*/)
         {
             _kafkaService = kafkaService;
             _cacheService = cacheService;
             _socialManagementRepository = socialManagementRepository;
             facebookApi = configuration.GetSection("social:domain-api:facebook").Value;
             facebookVersion = configuration.GetSection("social:version:facebook").Value;
-            _blobContainer = blobContainer;
+            //_blobContainer = blobContainer;
         }
 
         [HttpGet]
@@ -163,13 +163,17 @@ namespace Webhook.Controllers
                                 }
 
                                 //convert to base64
-                                byte[] contentByte = GetImage(payload.url);
-                                string encodeStr = Convert.ToBase64String(contentByte);
-
-                                if(!(await _blobContainer.ExistsAsync(messaging.message.mid)))
+                                byte[] contentByte;
+                                try
                                 {
-                                    await _blobContainer.SaveAsync(messaging.message.mid, contentByte);
+                                    contentByte = GetImage(payload.url);
                                 }
+                                catch (Exception e)
+                                {
+                                    Log.Error("Fb Message --\r : Convert file or image to base64 fail : \r" + JsonConvert.SerializeObject(e));
+                                    return Ok();
+                                }
+                                string encodeStr = Convert.ToBase64String(contentByte);
                                 attr.payload.fileBase64 = encodeStr;
                                 attr.payload.type = attr.payload.name.Split(".")[1];
 
@@ -318,8 +322,18 @@ namespace Webhook.Controllers
 
                                     var url = attachment.payload.url;
 
-                                    //đọc content file
-                                    string encodeStr = (new WebClient()).DownloadString(url);
+                                    //convert to base64
+                                    byte[] contentByte;
+                                    try
+                                    {
+                                        contentByte = GetImage(url);
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        Log.Error("Fb Comment --\r : Convert file or image to base64 fail : \r" + JsonConvert.SerializeObject(e));
+                                        return Ok();
+                                    }
+                                    string encodeStr = Convert.ToBase64String(contentByte);
                                     attachment.payload.fileBase64 = encodeStr;
                                     attachment.payload.type = attachment.payload.name.Split(".")[1];
 
