@@ -188,7 +188,6 @@ namespace Webhook.Controllers
                                             break;
                                     }
 
-                                    return Ok();
                                     contentByte = GetImage(downloadUrl);
                                 }
                                 catch (Exception e)
