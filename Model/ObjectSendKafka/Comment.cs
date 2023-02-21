@@ -1,7 +1,7 @@
 ﻿using Webhook.Model.Event;
 using Webhook.Model.Event.Facebook.Message;
 
-namespace Webhook.Model
+namespace Webhook.Model.ObjectSendKafka
 {
     public class Comment : FeedBase
     {

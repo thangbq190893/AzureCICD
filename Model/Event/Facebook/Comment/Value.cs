@@ -13,5 +13,7 @@
         public string? verb { get; set; }
         public string? photo { get; set; }
         public string? video { get; set; }
+        public string? link { get; set; }
+        public string? photo_id { get; set; }
     }
 }

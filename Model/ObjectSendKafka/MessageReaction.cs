@@ -1,4 +1,4 @@
-﻿namespace Webhook.Model
+﻿namespace Webhook.Model.ObjectSendKafka
 {
     public class MessageReaction : MessageBase
     {

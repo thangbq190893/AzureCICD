@@ -1,18 +1,13 @@
-﻿using FakeItEasy;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Serilog;
 using System.Dynamic;
 using System.Net;
-using System.Text;
-using System.Text.Json;
-using Volo.Abp.BlobStoring;
 using Webhook.Interface;
-using Webhook.Model;
 using Webhook.Model.Event;
 using Webhook.Model.Event.Facebook.Comment;
 using Webhook.Model.Event.Facebook.Message;
-using Webhook.Service;
+using Webhook.Model.ObjectSendKafka;
 
 namespace Webhook.Controllers
 {
@@ -81,14 +76,23 @@ namespace Webhook.Controllers
                 string senderId = messaging.sender.id;
                 string recipientId = messaging.recipient.id;
                 // token của page
-                string accessToken = facebookPages["" + recipientId];
+                string accessToken;
 
-                if (accessToken != null)
+                facebookPages.TryGetValue(recipientId, out accessToken);
+
+                SocialUserInformation sender = null;
+
+                //Get cached missing
+
+                if (sender == null)
                 {
-                    SocialUserInformation sender = null;
-                    try
+                    if (accessToken == null)
                     {
-                        if (sender == null)
+                        Log.Information("--Missing page access token--\rPageId : " + recipientId);
+                    }
+                    else
+                    {
+                        try
                         {
                             string fields = "id,name,profile_pic";
                             string url = string.Format(facebookApi + "/" + facebookVersion + "/" + senderId + "?fields=" + fields + "&access_token=" + accessToken);
@@ -102,153 +106,145 @@ namespace Webhook.Controllers
                                 }
                             }
                         }
-
-                        if (sender == null)
+                        catch (Exception ex)
                         {
-                            return Ok(new MessageToKafka
-                            {
-                                code = 500,
-                                message = "Fb get user info fail",
-                                data = null
-                            });
+                            Log.Information("--Fb get user info fail : --\r" + JsonConvert.SerializeObject(ex));
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Log.Information("Fb get user info fail : " + JsonConvert.SerializeObject(ex));
-                    }
+                }
 
-                    Reaction? reaction = messaging.reaction;
-                    if (reaction == null)
+                Reaction? reaction = messaging.reaction;
+                if (reaction == null)
+                {
+                    string text = messaging.message.text;
+                    //message with text only
+                    if (text != null)
                     {
-                        string text = messaging.message.text;
-                        //message with text only
-                        if (text != null)
+                        MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
+                            senderId, sender != null ? sender.name : null, sender != null ? sender.profile_pic : null,
+                            "null", recipientId, messaging.message.mid,
+                            text, null, recipientId);
+
+                        //Send to kafka server
+                        try
                         {
+                            await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                                                            new MessageToKafka
+                                                            {
+                                                                code = 200,
+                                                                message = "successfully",
+                                                                data = mes
+                                                            }));
+
+                            Log.Information("--Fb Message send to kafka server success--");
+                        }
+                        catch (Exception e)
+                        {
+                            Log.Error("--Fb Message send to kafka server fail : --\r" + JsonConvert.SerializeObject(e));
+                        }
+                    }
+                    //message with attachment only
+                    else
+                    {
+                        int i = 0;
+                        foreach (Attachment attachment in messaging.message.attachments)
+                        {
+                            Attachment attr = attachment;
+                            Payload payload = attr.payload;
+
+                            // Tạo đường dẫn trong ổ
+                            if (attr.type.Equals("file") || attr.type.Equals("image") || attr.type.Equals("video"))
+                            {
+                                attr.payload.name = payload.url.Split("/")[payload.url.Split("/").Length - 1].Split("?")[0];
+                            }
+
+                            if (payload.sticker_id != null)
+                            {
+                                attr.type = "sticker";
+                            }
+
+                            //convert to base64
+                            byte[] contentByte;
+
+                            string downloadUrl;
+
+                            switch (attr.type)
+                            {
+                                case "file":
+                                case "audio":
+                                    downloadUrl = facebookFileBigUrl + payload.url.Substring(payload.url.NthIndexOf('/', 3));
+                                    break;
+                                case "video":
+                                    downloadUrl = facebookVideoUrl + payload.url.Substring(payload.url.NthIndexOf('/', 3));
+                                    break;
+                                default:
+                                    downloadUrl = facebookFileSmallUrl + payload.url.Substring(payload.url.NthIndexOf('/', 3));
+                                    break;
+                            }
+
+                            try
+                            {
+                                contentByte = GetImage(downloadUrl);
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error("Fb Message --\r : Convert file or image to base64 fail : \r" + JsonConvert.SerializeObject(e));
+                                return Ok();
+                            }
+
+                            string encodeStr = Convert.ToBase64String(contentByte);
+                            attr.payload.fileBase64 = encodeStr;
+                            attr.payload.type = attr.payload.name.Split(".")[1];
+
                             MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
-                                senderId, sender.name != null ? sender.name : "", sender.profile_pic != null ? sender.profile_pic : "",
-                                "null", recipientId, messaging.message.mid,
-                                text, null, recipientId);
+                                   sender.id, sender.name != null ? sender.name : "", sender.profile_pic != null ? sender.profile_pic : "", "null", recipientId, messaging.message.mid + "_" + i,
+                                   "", attr, recipientId);
 
                             //Send to kafka server
                             try
                             {
                                 await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                                                                new MessageToKafka
-                                                                {
-                                                                    code = 200,
-                                                                    message = "successfully",
-                                                                    data = mes
-                                                                }));
+                               new MessageToKafka
+                               {
+                                   code = 200,
+                                   message = "successfully",
+                                   data = mes
+                               }));
 
-                                Log.Information("Fb Message send to kafka server success");
+                                i++;
+
+                                Log.Information("Fb Attachment send to kafka server success");
                             }
                             catch (Exception e)
                             {
-                                Log.Error("Fb Message send to kafka server fail : " + JsonConvert.SerializeObject(e));
-                            }
-                        }
-                        //message with attachment only
-                        else
-                        {
-                            int i = 0;
-                            foreach (Attachment attachment in messaging.message.attachments)
-                            {
-                                Attachment attr = attachment;
-                                Payload payload = attr.payload;
-
-                                // Tạo đường dẫn trong ổ
-                                if (attr.type.Equals("file") || attr.type.Equals("image") || attr.type.Equals("video"))
-                                {
-                                    attr.payload.name = payload.url.Split("/")[payload.url.Split("/").Length - 1].Split("?")[0];
-                                }
-
-                                if (payload.sticker_id != null)
-                                {
-                                    attr.type = "sticker";
-                                }
-
-                                //convert to base64
-                                byte[] contentByte;
-
-                                string downloadUrl;
-
-                                try
-                                {
-                                    switch (attr.type)
-                                    {
-                                        case "file": case "audio":
-                                            downloadUrl = facebookFileBigUrl + payload.url.Substring(payload.url.NthIndexOf('/', 3));
-                                            break;
-                                        case "video":
-                                            downloadUrl = facebookVideoUrl + payload.url.Substring(payload.url.NthIndexOf('/', 3));
-                                            break;
-                                        default:
-                                            downloadUrl = facebookFileSmallUrl + payload.url.Substring(payload.url.NthIndexOf('/', 3));
-                                            break;
-                                    }
-
-                                    contentByte = GetImage(downloadUrl);
-                                }
-                                catch (Exception e)
-                                {
-                                    Log.Error("Fb Message --\r : Convert file or image to base64 fail : \r" + JsonConvert.SerializeObject(e));
-                                    return Ok();
-                                }
-                                string encodeStr = Convert.ToBase64String(contentByte);
-                                attr.payload.fileBase64 = encodeStr;
-                                attr.payload.type = attr.payload.name.Split(".")[1];
-
-                                MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
-                                       sender.id, sender.name != null ? sender.name : "", sender.profile_pic != null ? sender.profile_pic : "", "null", recipientId, messaging.message.mid + "_" + i,
-                                       "", attr, recipientId);
-
-                                //Send to kafka server
-                                try
-                                {
-                                    await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                                   new MessageToKafka
-                                   {
-                                       code = 200,
-                                       message = "successfully",
-                                       data = mes
-                                   }));
-
-                                    i++;
-
-                                    Log.Information("Fb Attachment send to kafka server success");
-                                }
-                                catch (Exception e)
-                                {
-                                    Log.Error("Fb Attachment send to kafka server fail : " + JsonConvert.SerializeObject(e));
-                                }
+                                Log.Error("Fb Attachment send to kafka server fail : " + JsonConvert.SerializeObject(e));
                             }
                         }
                     }
-                    //message with reaction
-                    else
+                }
+                //message with reaction
+                else
+                {
+                    MessageReaction mes = new MessageReaction(channel, messaging.timestamp,
+                       senderId, sender.name, sender.profile_pic,
+                       "null", recipientId, reaction.mid,
+                       reaction.action, reaction.emoji, reaction.reaction, recipientId);
+
+                    try
                     {
-                        MessageReaction mes = new MessageReaction(channel, messaging.timestamp,
-                           senderId, sender.name, sender.profile_pic,
-                           "null", recipientId, reaction.mid,
-                           reaction.action, reaction.emoji, reaction.reaction, recipientId);
+                        await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
+                                                    new MessageToKafka
+                                                    {
+                                                        code = 200,
+                                                        message = "successfully",
+                                                        data = mes
+                                                    }));
 
-                        try
-                        {
-                            await _kafkaService.SendFacebookMessage(System.Text.Json.JsonSerializer.Serialize(
-                                                        new MessageToKafka
-                                                        {
-                                                            code = 200,
-                                                            message = "successfully",
-                                                            data = mes
-                                                        }));
-
-                            Log.Information("Fb Message React send to kafka server success");
-                        }
-                        catch (Exception e)
-                        {
-                            Log.Error("Fb Message React send to kafka server fail : " + JsonConvert.SerializeObject(e));
-                        }
+                        Log.Information("Fb Message React send to kafka server success");
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Error("Fb Message React send to kafka server fail : " + JsonConvert.SerializeObject(e));
                     }
                 }
             }
@@ -263,18 +259,24 @@ namespace Webhook.Controllers
                 {
                     if (!value.verb.Equals("edited"))
                     {
+                        //Get Info comment user
                         string senderId = value.from.id;
                         string pageId = input.entry[0].id;
 
-                        if (value.item.Equals("comment"))
+                        string accessToken;
+                        facebookPages.TryGetValue(pageId, out accessToken);
+
+                        SocialUserInformation sender = null;
+
+                        if (sender == null)
                         {
-                            string accessToken = facebookPages["" + pageId];
-
-                            SocialUserInformation sender = null;
-
-                            try
+                            if (accessToken == null)
                             {
-                                if (sender == null && accessToken != null)
+                                Log.Information("--Missing page access token--\rPageId : " + pageId);
+                            }
+                            else
+                            {
+                                try
                                 {
                                     string fields = "id,name,profile_pic";
                                     string url = string.Format(facebookApi + "/" + facebookVersion + "/" + senderId + "?fields=" + fields + "&access_token=" + accessToken);
@@ -288,82 +290,123 @@ namespace Webhook.Controllers
                                         }
                                     }
                                 }
-                            }
-                            catch (IOException e)
-                            {
-                                Log.Information("Fb get user info fail : " + JsonConvert.SerializeObject(e));
-                            }
-
-                            if (sender != null)
-                            {
-                                Comment comment;
-                                Attachment attachment = new Attachment();
-                                attachment.payload = new Payload();
-                                if (value.photo == null && value.video == null)
+                                catch (Exception ex)
                                 {
-                                    comment = new Comment(value.comment_id, value.from.id
-                                       , value.from.name, value.post_id, value.message
-                                       , value.created_time, value.parent_id
-                                       , value.item, sender.profile_pic != null ? sender.profile_pic : "", null);
+                                    Log.Information("--Fb get user info fail : --\r" + JsonConvert.SerializeObject(ex));
+                                }
+                            }
+                        }
 
-                                    try
-                                    {
-                                        await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
-                                          new MessageToKafka
-                                          {
-                                              code = 200,
-                                              message = "successfully",
-                                              data = comment
-                                          }));
+                        if (value.item.Equals("comment"))
+                        {
+                            Comment comment;
+                            Attachment attachment = new Attachment();
+                            attachment.payload = new Payload();
+                            if (value.photo == null && value.video == null)
+                            {
+                                comment = new Comment(value.comment_id, senderId
+                                   , sender != null ? sender.name : null, value.post_id, value.message
+                                   , value.created_time, value.parent_id
+                                   , value.item, sender != null ? sender.profile_pic : null, null);
 
-                                        Log.Information("Fb Feed send to kafka server success");
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        Log.Error("Fb Feed send to kafka server fail : " + JsonConvert.SerializeObject(e));
-                                    }
+                                try
+                                {
+                                    await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
+                                      new MessageToKafka
+                                      {
+                                          code = 200,
+                                          message = "successfully",
+                                          data = comment
+                                      }));
+
+                                    Log.Information("--Fb Feed send to kafka server success--");
+                                }
+                                catch (Exception e)
+                                {
+                                    Log.Error("--Fb Feed send to kafka server fail : --\r" + JsonConvert.SerializeObject(e));
+                                }
+                            }
+                            else
+                            {
+                                if (value.photo != null)
+                                {
+                                    attachment.type = "image";
+                                    attachment.payload.url = value.photo;
                                 }
                                 else
                                 {
-                                    if (value.photo != null)
-                                    {
-                                        attachment.type = "image";
-                                        attachment.payload.url = value.photo;
-                                    }
-                                    else
-                                    {
-                                        attachment.type = "video";
-                                        attachment.payload.url = value.video;
-                                    }
-
-                                    // Sticker
-                                    if (attachment.type.Equals("file") || attachment.type.Equals("image") || attachment.type.Equals("video"))
-                                    {
-                                        attachment.payload.name = attachment.payload.url.Split("/")[attachment.payload.url.Split("/").Length - 1].Split("?")[0];
-                                    }
-
-                                    var url = attachment.payload.url;
-
-                                    //convert to base64
-                                    byte[] contentByte;
-                                    try
-                                    {
-                                        contentByte = GetImage(url);
-                                    }
-                                    catch (Exception e)
-                                    {
-                                        Log.Error("Fb Comment --\r : Convert file or image to base64 fail : \r" + JsonConvert.SerializeObject(e));
-                                        return Ok();
-                                    }
-                                    string encodeStr = Convert.ToBase64String(contentByte);
-                                    attachment.payload.fileBase64 = encodeStr;
-                                    attachment.payload.type = attachment.payload.name.Split(".")[1];
-
-                                    comment = new Comment(value.comment_id, value.from.id
-                                    , value.from.name, value.post.id, value.message
-                                    , value.created_time, value.parent_id
-                                    , value.item, sender.profile_pic != null ? sender.profile_pic : "", attachment);
+                                    attachment.type = "video";
+                                    attachment.payload.url = value.video;
                                 }
+
+                                // Sticker
+                                if (attachment.type.Equals("file") || attachment.type.Equals("image") || attachment.type.Equals("video"))
+                                {
+                                    attachment.payload.name = attachment.payload.url.Split("/")[attachment.payload.url.Split("/").Length - 1].Split("?")[0];
+                                }
+
+                                var url = attachment.payload.url;
+
+                                //convert to base64
+                                byte[] contentByte;
+                                try
+                                {
+                                    contentByte = GetImage(url);
+                                }
+                                catch (Exception e)
+                                {
+                                    Log.Error("Fb Comment --\r : Convert file or image to base64 fail : \r" + JsonConvert.SerializeObject(e));
+                                    return Ok();
+                                }
+
+                                string encodeStr = Convert.ToBase64String(contentByte);
+                                attachment.payload.fileBase64 = encodeStr;
+                                attachment.payload.type = attachment.payload.name.Split(".")[1];
+                                attachment.payload.size = contentByte.Length;
+
+                                comment = new Comment(value.comment_id, value.from.id
+                                , value.from.name, value.post.id, null
+                                , value.created_time, value.parent_id
+                                , value.item, sender.profile_pic != null ? sender.profile_pic : "", attachment);
+
+                                try
+                                {
+                                    await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
+                                      new MessageToKafka
+                                      {
+                                          code = 200,
+                                          message = "successfully",
+                                          data = comment
+                                      }));
+
+                                    Log.Information("--Fb Feed send to kafka server success--");
+                                }
+                                catch (Exception e)
+                                {
+                                    Log.Error("--Fb Feed send to kafka server fail : --\r" + JsonConvert.SerializeObject(e));
+                                }
+                            }
+                        }
+                        else if(value.item.Equals("status") || value.item.Equals("photo") || value.item.Equals("video"))
+                        {
+                            PostToKafka post = new PostToKafka(value.post_id, value.message == null ? "null" : value.message, value.link, value.photo_id,
+                               sender != null ? sender.name : null, senderId, value.created_time, value.item);
+
+                            try
+                            {
+                                await _kafkaService.SendFacebookFeed(System.Text.Json.JsonSerializer.Serialize(
+                                  new MessageToKafka
+                                  {
+                                      code = 200,
+                                      message = "successfully",
+                                      data = post
+                                  }));
+
+                                Log.Information("--Fb Feed send to kafka server success--");
+                            }
+                            catch (Exception e)
+                            {
+                                Log.Error("--Fb Feed send to kafka server fail : --\r" + JsonConvert.SerializeObject(e));
                             }
                         }
                     }

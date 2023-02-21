@@ -2,8 +2,8 @@
 using Newtonsoft.Json;
 using System.Net;
 using Webhook.Interface;
-using Webhook.Model;
 using Webhook.Model.Event.Zalo;
+using Webhook.Model.ObjectSendKafka;
 
 namespace Webhook.Controllers
 {
