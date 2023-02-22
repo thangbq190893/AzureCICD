@@ -593,7 +593,8 @@ namespace SocialOut.Service
             Dictionary<string, string> FacebookPages = await _cacheService.GetFbInfo();
             string url;
 
-            string token = FacebookPages["" + mes.senderId];
+            string token;
+            FacebookPages.TryGetValue(mes.senderId, out token);
 
             if (token != null)
             {
@@ -627,20 +628,24 @@ namespace SocialOut.Service
                         var result = await client.PostAsync(url, data);
                         if (result.IsSuccessStatusCode)
                         {
-                            Log.Information("Fb Reply message text success");
+                            Log.Information("--Fb Reply message text success--");
                             SendMessageResponseData res = JsonConvert.DeserializeObject<SendMessageResponseData>(result.Content.ReadAsStringAsync().Result);
                             return res;
                         }
                         else
                         {
-                            Log.Warning("Fb Reply message text fail");
+                            Log.Warning("--Fb Reply message text fail--");
                         }
                     }
                     catch (Exception e)
                     {
-                        Log.Warning("Fb Reply message text fail");
+                        Log.Warning("--Fb Reply message text fail--");
                     }
                 }
+            }
+            else
+            {
+                Log.Error("--Reply message text missing token-- : \rPageId : " + mes.senderId);
             }
             return null;
         }
@@ -648,7 +653,8 @@ namespace SocialOut.Service
         public async Task<DetailCommentResponse> ReplyComment(ReplyComment input)
         {
             Dictionary<string, string> FacebookPages = await _cacheService.GetFbInfo();
-            string token = FacebookPages["" + input.pageId];
+            string token;
+            FacebookPages.TryGetValue(input.pageId, out token);
             if (token != null)
             {
                 using (var client = new HttpClient())
@@ -666,7 +672,7 @@ namespace SocialOut.Service
                         var result = await client.PostAsync(url, data);
                         if (result.IsSuccessStatusCode)
                         {
-                            Log.Information("Reply comment success");
+                            Log.Information("--Reply comment success--");
                             var model = result.Content.ReadAsStringAsync().Result;
 
                             ReplyCommentResponse res = JsonConvert.DeserializeObject<ReplyCommentResponse>(model);
@@ -689,16 +695,20 @@ namespace SocialOut.Service
                         }
                         else
                         {
-                            Log.Warning("Reply comment fail");
+                            Log.Warning("--Reply comment fail--");
                         }
                     }
                     catch (Exception e)
                     {
-                        Log.Warning("Reply comment fail : " + e.Message);
+                        Log.Warning("--Reply comment fail-- : \r" + e.Message);
                     }
                 }
 
                 return null;
+            }
+            else
+            {
+                Log.Error("--Reply comment missing token-- : \rPageId : " + input.pageId);
             }
 
             return null;
@@ -712,7 +722,8 @@ namespace SocialOut.Service
             foreach (string pageId in input.PageId)
             {
                 SocialInformation socialInfo = new SocialInformation();
-                string token = FacebookPages["" + pageId];
+                string token;
+                FacebookPages.TryGetValue(pageId, out token);
                 if (token != null)
                 {
                     string url = string.Format(facebookApi + "/{0}?access_token={1}&fields=name,followers_count,picture", pageId, token);
@@ -737,14 +748,18 @@ namespace SocialOut.Service
                             }
                             else
                             {
-                                Log.Warning("Get fb information err");
+                                Log.Warning("--Get fb information err-- : \r");
                             }
                         }
                         catch (Exception e)
                         {
-                            Log.Warning("Get fb information err : " + e.Message);
+                            Log.Warning("--Get fb information err-- : \r" + e.Message);
                         }
                     }
+                }
+                else
+                {
+                    Log.Error("--Reply get page info missing token-- : \rPageId : " + pageId);
                 }
             }
 
