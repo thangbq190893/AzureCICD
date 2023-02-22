@@ -195,7 +195,7 @@ namespace Webhook.Controllers
                             string encodeStr = Convert.ToBase64String(contentByte);
                             attr.payload.fileBase64 = encodeStr;
                             attr.payload.type = attr.payload.name.Split(".")[1];
-
+                            attachment.payload.size = contentByte.Length;
                             MessageAttachment mes = new MessageAttachment(channel, messaging.timestamp,
                                    sender.id, sender.name != null ? sender.name : "", sender.profile_pic != null ? sender.profile_pic : "", "null", recipientId, messaging.message.mid + "_" + i,
                                    "", attr, recipientId);
@@ -389,7 +389,7 @@ namespace Webhook.Controllers
                         }
                         else if(value.item.Equals("status") || value.item.Equals("photo") || value.item.Equals("video"))
                         {
-                            PostToKafka post = new PostToKafka(value.post_id, value.message == null ? "null" : value.message, value.link, value.photo_id,
+                            PostToKafka post = new PostToKafka(value.post_id, value.message == null ? "null" : value.message, value.link, value.photo_id == null ? "null" : value.photo_id,
                                sender != null ? sender.name : null, senderId, value.created_time, value.item);
 
                             try
