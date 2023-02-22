@@ -11,6 +11,6 @@ namespace SocialOut.Interface
         Task<SendMessageResponseData> SendText(MessageData mes);
         Task<DetailCommentResponse> ReplyComment(ReplyComment input);
         Task<List<SocialInformation>> GetPageInfo(PageInfo input);
-        Task SendAttachment(IFormFile filedata, string senderId, string recipient, string message, string type);
+        Task<SendMessageResponseData> SendAttachment(IFormFile filedata, string senderId, string recipient, string message, string type);
     }
 }

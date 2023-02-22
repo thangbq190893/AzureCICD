@@ -78,8 +78,20 @@ namespace SocialOut.Controllers
         {
             try
             {
-                await _facebookService.SendAttachment(input.filedata, input.data.senderId, input.data.recipient, input.data.message, input.data.type);
-                return Ok();
+                SendMessageResponseData res = await _facebookService.SendAttachment(input.filedata, input.data.senderId, input.data.recipient, input.data.message, input.data.type);
+                if (res != null)
+                {
+                    return Ok(new SendMessage
+                    {
+                        code = 200,
+                        message = "successfully",
+                        data = res
+                    });
+                }
+                else
+                {
+                    return StatusCode(500);
+                }
             }
             catch (Exception e)
             {
